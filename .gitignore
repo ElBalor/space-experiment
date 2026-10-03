@@ -1,0 +1,19 @@
+# --- model artifacts & simulation data ---
+*.pt
+*.pth
+*.npy
+*.npz
+*.h5
+*.pkl
+*.db
+
+# --- python ---
+__pycache__/
+*.py[cod]
+venv/
+.venv/
+.ipynb_checkpoints/
+
+# --- os / editor ---
+.DS_Store
+Thumbs.db

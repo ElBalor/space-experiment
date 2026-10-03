@@ -1,0 +1,1206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>THERMAL NECROMANCY — Orbital AI Cooling Simulation</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&family=Exo+2:wght@300;400;600&display=swap');
+
+  :root {
+    --cyan: #00f5ff;
+    --orange: #ff6b00;
+    --red: #ff2244;
+    --green: #00ff88;
+    --bg: #020408;
+    --panel: rgba(0,20,35,0.85);
+    --border: rgba(0,245,255,0.15);
+  }
+
+  * { margin:0; padding:0; box-sizing:border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--cyan);
+    font-family: 'Exo 2', sans-serif;
+    overflow-x: hidden;
+    min-height: 100vh;
+  }
+
+  /* ── CANVAS ── */
+  #canvas-container {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+  }
+  canvas { display: block; width: 100% !important; height: 100% !important; }
+
+  /* ── SCANLINE OVERLAY ── */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0,0,0,0.03) 2px,
+      rgba(0,0,0,0.03) 4px
+    );
+    pointer-events: none;
+    z-index: 10;
+  }
+
+  /* ── HEADER ── */
+  header {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    z-index: 100;
+    padding: 16px 28px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: linear-gradient(180deg, rgba(2,4,8,0.95) 0%, transparent 100%);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .logo {
+    font-family: 'Orbitron', sans-serif;
+    font-weight: 900;
+    font-size: clamp(12px, 2.5vw, 18px);
+    letter-spacing: 0.15em;
+    color: var(--cyan);
+    text-shadow: 0 0 20px var(--cyan);
+  }
+  .logo span { color: var(--orange); }
+
+  .status-bar {
+    display: flex;
+    gap: 20px;
+    align-items: center;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: clamp(9px, 1.5vw, 12px);
+  }
+  .status-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--green);
+    box-shadow: 0 0 8px var(--green);
+    animation: pulse 1.5s ease-in-out infinite;
+  }
+  @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.4;transform:scale(0.7)} }
+
+  /* ── TABS ── */
+  .tabs {
+    position: fixed;
+    top: 64px; left: 0; right: 0;
+    z-index: 99;
+    display: flex;
+    justify-content: center;
+    gap: 4px;
+    padding: 10px 20px;
+  }
+
+  .tab {
+    font-family: 'Orbitron', sans-serif;
+    font-size: clamp(9px, 1.8vw, 12px);
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    padding: 8px 18px;
+    border: 1px solid var(--border);
+    background: rgba(0,10,20,0.6);
+    color: rgba(0,245,255,0.4);
+    cursor: pointer;
+    transition: all 0.3s;
+    clip-path: polygon(8px 0%, 100% 0%, calc(100% - 8px) 100%, 0% 100%);
+  }
+  .tab.active {
+    background: rgba(0,245,255,0.1);
+    color: var(--cyan);
+    border-color: var(--cyan);
+    box-shadow: 0 0 20px rgba(0,245,255,0.2), inset 0 0 10px rgba(0,245,255,0.05);
+  }
+  .tab:hover:not(.active) { color: rgba(0,245,255,0.7); border-color: rgba(0,245,255,0.3); }
+
+  /* ── PANELS ── */
+  .panel-left {
+    position: fixed;
+    left: 16px;
+    top: 130px;
+    bottom: 80px;
+    width: clamp(200px, 22vw, 280px);
+    z-index: 50;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    overflow-y: auto;
+    scrollbar-width: none;
+  }
+  .panel-left::-webkit-scrollbar { display:none; }
+
+  .panel-right {
+    position: fixed;
+    right: 16px;
+    top: 130px;
+    bottom: 80px;
+    width: clamp(200px, 22vw, 280px);
+    z-index: 50;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    overflow-y: auto;
+    scrollbar-width: none;
+  }
+  .panel-right::-webkit-scrollbar { display:none; }
+
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    padding: 14px;
+    backdrop-filter: blur(12px);
+    clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 12px 100%, 0 calc(100% - 12px));
+    opacity: 0;
+    transform: translateX(-30px);
+  }
+  .panel-right .card { transform: translateX(30px); }
+
+  .card-title {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.2em;
+    color: var(--cyan);
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .card-title::before {
+    content: '';
+    width: 4px; height: 4px;
+    background: var(--cyan);
+    box-shadow: 0 0 6px var(--cyan);
+    transform: rotate(45deg);
+    flex-shrink: 0;
+  }
+
+  /* ── METRICS ── */
+  .metric { margin-bottom: 10px; }
+  .metric-label {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 9px;
+    color: rgba(0,245,255,0.5);
+    letter-spacing: 0.1em;
+    margin-bottom: 4px;
+  }
+  .metric-value {
+    font-family: 'Orbitron', monospace;
+    font-size: clamp(16px, 3vw, 24px);
+    font-weight: 700;
+    line-height: 1;
+  }
+  .metric-value.hot { color: var(--red); text-shadow: 0 0 15px var(--red); }
+  .metric-value.ok { color: var(--green); text-shadow: 0 0 15px var(--green); }
+  .metric-value.warn { color: var(--orange); text-shadow: 0 0 15px var(--orange); }
+  .metric-value.cyan { color: var(--cyan); text-shadow: 0 0 15px var(--cyan); }
+
+  /* ── BAR ── */
+  .bar-track {
+    height: 4px;
+    background: rgba(0,245,255,0.08);
+    border-radius: 2px;
+    margin-top: 4px;
+    overflow: hidden;
+  }
+  .bar-fill {
+    height: 100%;
+    border-radius: 2px;
+    transition: width 0.3s ease;
+  }
+  .bar-fill.hot { background: linear-gradient(90deg, var(--orange), var(--red)); box-shadow: 0 0 8px var(--red); }
+  .bar-fill.ok { background: linear-gradient(90deg, #00aa55, var(--green)); box-shadow: 0 0 8px var(--green); }
+  .bar-fill.cyan { background: linear-gradient(90deg, #0088cc, var(--cyan)); box-shadow: 0 0 8px var(--cyan); }
+
+  /* ── GRAPH ── */
+  .mini-graph {
+    height: 50px;
+    position: relative;
+    margin-top: 6px;
+  }
+  .mini-graph canvas { width: 100% !important; height: 100% !important; }
+
+  /* ── COMPARISON TABLE ── */
+  .comparison {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+    margin-top: 6px;
+  }
+  .comp-item {
+    background: rgba(0,245,255,0.04);
+    border: 1px solid var(--border);
+    padding: 8px;
+    text-align: center;
+  }
+  .comp-label { font-size: 8px; color: rgba(0,245,255,0.4); font-family: 'Share Tech Mono', monospace; margin-bottom: 4px; }
+  .comp-val { font-family: 'Orbitron', monospace; font-size: 13px; font-weight: 700; }
+
+  /* ── BOTTOM BAR ── */
+  .bottom-bar {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    height: 56px;
+    z-index: 100;
+    background: linear-gradient(0deg, rgba(2,4,8,0.97) 0%, transparent 100%);
+    border-top: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 24px;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: clamp(8px, 1.4vw, 11px);
+    color: rgba(0,245,255,0.4);
+  }
+
+  .ticker {
+    display: flex;
+    gap: 24px;
+    overflow: hidden;
+  }
+  .ticker-item { white-space: nowrap; }
+  .ticker-item span { color: var(--green); }
+
+  .sim-controls {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .btn {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    padding: 6px 14px;
+    border: 1px solid currentColor;
+    background: transparent;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .btn-cyan { color: var(--cyan); }
+  .btn-cyan:hover { background: rgba(0,245,255,0.15); box-shadow: 0 0 15px rgba(0,245,255,0.3); }
+  .btn-orange { color: var(--orange); }
+  .btn-orange:hover { background: rgba(255,107,0,0.15); box-shadow: 0 0 15px rgba(255,107,0,0.3); }
+
+  /* ── CENTER TITLE ── */
+  .center-title {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    z-index: 200;
+    pointer-events: none;
+  }
+  .center-title h1 {
+    font-family: 'Orbitron', sans-serif;
+    font-weight: 900;
+    font-size: clamp(32px, 8vw, 90px);
+    letter-spacing: 0.05em;
+    color: var(--cyan);
+    text-shadow: 0 0 60px var(--cyan), 0 0 120px rgba(0,245,255,0.3);
+    line-height: 0.9;
+  }
+  .center-title h1 em {
+    display: block;
+    font-style: normal;
+    color: var(--orange);
+    text-shadow: 0 0 60px var(--orange);
+    font-size: 0.45em;
+    letter-spacing: 0.3em;
+    margin-bottom: 10px;
+  }
+  .center-title p {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: clamp(10px, 1.8vw, 14px);
+    color: rgba(0,245,255,0.5);
+    margin-top: 16px;
+    letter-spacing: 0.2em;
+  }
+
+  /* ── SCENE LABEL ── */
+  .scene-label {
+    position: fixed;
+    top: 120px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-family: 'Orbitron', sans-serif;
+    font-size: clamp(10px, 2vw, 14px);
+    font-weight: 700;
+    letter-spacing: 0.3em;
+    color: rgba(0,245,255,0.6);
+    z-index: 60;
+    white-space: nowrap;
+  }
+
+  /* ── MOBILE ── */
+  @media (max-width: 768px) {
+    .panel-left, .panel-right { display: none; }
+    .tabs { gap: 2px; padding: 8px 10px; }
+    .tab { padding: 6px 10px; }
+    .bottom-bar { padding: 0 12px; }
+    .ticker { display: none; }
+  }
+
+  @media (max-width: 480px) {
+    header { padding: 10px 14px; }
+    .status-bar > *:not(:first-child):not(:nth-child(2)) { display: none; }
+  }
+
+  /* ── FADE SCREENS ── */
+  .scene { display: none; }
+  .scene.active { display: block; }
+
+  /* ── GLITCH ── */
+  @keyframes glitch {
+    0%,100% { clip-path: inset(0 0 100% 0); }
+    10% { clip-path: inset(30% 0 50% 0); transform: translateX(-4px); }
+    20% { clip-path: inset(60% 0 10% 0); transform: translateX(4px); }
+    30% { clip-path: inset(10% 0 80% 0); transform: translateX(-2px); }
+    40% { clip-path: inset(80% 0 5% 0); transform: translateX(2px); }
+    50%,90% { clip-path: inset(0 0 0 0); transform: translateX(0); }
+  }
+
+  /* ── ANNOTATION ── */
+  .annotation {
+    position: fixed;
+    background: rgba(0,10,20,0.9);
+    border: 1px solid var(--cyan);
+    padding: 6px 10px;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 9px;
+    color: var(--cyan);
+    pointer-events: none;
+    z-index: 60;
+    white-space: nowrap;
+  }
+  .annotation::before {
+    content: '';
+    position: absolute;
+    left: -16px; top: 50%;
+    transform: translateY(-50%);
+    width: 15px; height: 1px;
+    background: var(--cyan);
+    box-shadow: 0 0 6px var(--cyan);
+  }
+</style>
+</head>
+<body>
+
+<div id="canvas-container"><canvas id="mainCanvas"></canvas></div>
+
+<!-- HEADER -->
+<header>
+  <div class="logo">THERMAL<span>NECROMANCY</span></div>
+  <div class="status-bar">
+    <div class="status-dot"></div>
+    <span>SIM LIVE</span>
+    <span id="fps-counter">60 FPS</span>
+    <span id="sim-time">T+00:00</span>
+  </div>
+</header>
+
+<!-- TABS -->
+<div class="tabs">
+  <button class="tab active" onclick="switchScene(0,this)">MHD FLOW</button>
+  <button class="tab" onclick="switchScene(1,this)">HEAT MAP</button>
+  <button class="tab" onclick="switchScene(2,this)">JINX vs DNS</button>
+</div>
+
+<!-- SCENE LABEL -->
+<div class="scene-label" id="scene-label">MAGNETOHYDRODYNAMIC LIQUID METAL COOLING</div>
+
+<!-- LEFT PANEL -->
+<div class="panel-left" id="panel-left">
+
+  <div class="card" id="c1">
+    <div class="card-title">SYSTEM STATUS</div>
+    <div class="metric">
+      <div class="metric-label">CHIP TEMP</div>
+      <div class="metric-value hot" id="chip-temp">847°C</div>
+      <div class="bar-track"><div class="bar-fill hot" id="temp-bar" style="width:85%"></div></div>
+    </div>
+    <div class="metric">
+      <div class="metric-label">COOLANT FLOW RATE</div>
+      <div class="metric-value cyan" id="flow-rate">2.4 m/s</div>
+      <div class="bar-track"><div class="bar-fill cyan" id="flow-bar" style="width:60%"></div></div>
+    </div>
+    <div class="metric">
+      <div class="metric-label">THERMAL LOAD</div>
+      <div class="metric-value warn" id="thermal-load">1.2 kW</div>
+      <div class="bar-track"><div class="bar-fill hot" id="load-bar" style="width:75%"></div></div>
+    </div>
+  </div>
+
+  <div class="card" id="c2">
+    <div class="card-title">MHD PUMP</div>
+    <div class="metric">
+      <div class="metric-label">MOVING PARTS</div>
+      <div class="metric-value ok">ZERO</div>
+    </div>
+    <div class="metric">
+      <div class="metric-label">GALINSTAN VELOCITY</div>
+      <div class="metric-value cyan" id="galinstan-v">3.1 m/s</div>
+    </div>
+    <div class="metric">
+      <div class="metric-label">EM FIELD STRENGTH</div>
+      <div class="metric-value cyan" id="em-field">0.8 T</div>
+    </div>
+    <div class="metric">
+      <div class="metric-label">PUMP MASS</div>
+      <div class="metric-value ok">0.3 kg</div>
+    </div>
+    <div class="metric">
+      <div class="metric-label">vs MECHANICAL</div>
+      <div class="metric-value hot">2.1 kg</div>
+    </div>
+  </div>
+
+  <div class="card" id="c3">
+    <div class="card-title">ORBIT PARAMS</div>
+    <div class="metric">
+      <div class="metric-label">ALTITUDE</div>
+      <div class="metric-value cyan">550 km LEO</div>
+    </div>
+    <div class="metric">
+      <div class="metric-label">VACUUM PRESSURE</div>
+      <div class="metric-value cyan">10⁻¹⁰ Pa</div>
+    </div>
+    <div class="metric">
+      <div class="metric-label">CONVECTION</div>
+      <div class="metric-value hot">NONE</div>
+    </div>
+    <div class="metric">
+      <div class="metric-label">RADIATION ONLY</div>
+      <div class="metric-value warn">INSUFFICIENT</div>
+    </div>
+  </div>
+
+</div>
+
+<!-- RIGHT PANEL -->
+<div class="panel-right" id="panel-right">
+
+  <div class="card" id="c4">
+    <div class="card-title">JINX SURROGATE</div>
+    <div class="metric">
+      <div class="metric-label">MODEL</div>
+      <div class="metric-value cyan" style="font-size:14px">SpaceTransformer</div>
+    </div>
+    <div class="metric">
+      <div class="metric-label">MSE</div>
+      <div class="metric-value ok">1.53×10⁻³</div>
+    </div>
+    <div class="metric">
+      <div class="metric-label">STABILITY STEPS</div>
+      <div class="metric-value ok" id="jinx-steps">500 ✓</div>
+    </div>
+    <div class="metric">
+      <div class="metric-label">CLASSICAL SOLVER</div>
+      <div class="metric-value hot" id="dns-steps">EXPLODES @150</div>
+    </div>
+  </div>
+
+  <div class="card" id="c5">
+    <div class="card-title">ENERGY STABILITY</div>
+    <div class="mini-graph">
+      <canvas id="energyGraph"></canvas>
+    </div>
+    <div class="comparison" style="margin-top:8px">
+      <div class="comp-item">
+        <div class="comp-label">JINX</div>
+        <div class="comp-val" style="color:var(--green)">STABLE</div>
+      </div>
+      <div class="comp-item">
+        <div class="comp-label">DNS</div>
+        <div class="comp-val" style="color:var(--red)">DIVERGED</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" id="c6">
+    <div class="card-title">ECONOMIC IMPACT</div>
+    <div class="metric">
+      <div class="metric-label">MASS SAVING / SAT</div>
+      <div class="metric-value ok">1.8 kg</div>
+    </div>
+    <div class="metric">
+      <div class="metric-label">LAUNCH COST @$7k/kg</div>
+      <div class="metric-value ok">$12,600 / SAT</div>
+    </div>
+    <div class="metric">
+      <div class="metric-label">×1M SATELLITES</div>
+      <div class="metric-value cyan" style="font-size:16px">$12.6B</div>
+    </div>
+  </div>
+
+</div>
+
+<!-- BOTTOM BAR -->
+<div class="bottom-bar">
+  <div class="ticker">
+    <div class="ticker-item">CHIP TEMP <span id="t1">847°C</span></div>
+    <div class="ticker-item">FLOW <span id="t2">2.4 m/s</span></div>
+    <div class="ticker-item">JINX MSE <span>1.53e-3</span></div>
+    <div class="ticker-item">STABILITY <span>500 STEPS</span></div>
+    <div class="ticker-item">MASS SAVED <span>1.8 kg/sat</span></div>
+  </div>
+  <div class="sim-controls">
+    <button class="btn btn-cyan" onclick="toggleSim()">⏸ PAUSE</button>
+    <button class="btn btn-orange" onclick="resetSim()">↺ RESET</button>
+  </div>
+</div>
+
+<script>
+// ─────────────────────────────────────────
+// THREE.JS SCENE SETUP
+// ─────────────────────────────────────────
+const canvas = document.getElementById('mainCanvas');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.2;
+
+const scene = new THREE.Scene();
+scene.fog = new THREE.FogExp2(0x020408, 0.035);
+
+const camera = new THREE.PerspectiveCamera(60, window.innerWidth/window.innerHeight, 0.1, 200);
+camera.position.set(0, 4, 12);
+
+function resize() {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+}
+window.addEventListener('resize', resize);
+resize();
+
+// ─────────────────────────────────────────
+// LIGHTING
+// ─────────────────────────────────────────
+const ambientLight = new THREE.AmbientLight(0x001020, 0.5);
+scene.add(ambientLight);
+
+const pointCyan = new THREE.PointLight(0x00f5ff, 3, 20);
+pointCyan.position.set(-4, 5, 4);
+scene.add(pointCyan);
+
+const pointOrange = new THREE.PointLight(0xff6b00, 2, 15);
+pointOrange.position.set(4, 3, 4);
+scene.add(pointOrange);
+
+const dirLight = new THREE.DirectionalLight(0xffffff, 0.5);
+dirLight.position.set(10, 20, 10);
+dirLight.castShadow = true;
+scene.add(dirLight);
+
+// ─────────────────────────────────────────
+// SCENE 0: MHD CHIP + LIQUID METAL FLOW
+// ─────────────────────────────────────────
+const scene0Group = new THREE.Group();
+scene.add(scene0Group);
+
+// SATELLITE BODY
+const satGeo = new THREE.BoxGeometry(5, 0.4, 3);
+const satMat = new THREE.MeshStandardMaterial({
+  color: 0x0a1520, roughness: 0.3, metalness: 0.9,
+  envMapIntensity: 0.5
+});
+const satellite = new THREE.Mesh(satGeo, satMat);
+satellite.position.y = -0.5;
+satellite.castShadow = true;
+satellite.receiveShadow = true;
+scene0Group.add(satellite);
+
+// SOLAR PANELS
+[-2.8, 2.8].forEach(x => {
+  const panelGeo = new THREE.BoxGeometry(2.2, 0.05, 2.5);
+  const panelMat = new THREE.MeshStandardMaterial({ color: 0x001a44, roughness: 0.2, metalness: 0.7 });
+  const panel = new THREE.Mesh(panelGeo, panelMat);
+  panel.position.set(x + (x > 0 ? 1.2 : -1.2), -0.5, 0);
+  // Grid lines on solar panel
+  const gridMat = new THREE.MeshBasicMaterial({ color: 0x0066ff, wireframe: true, transparent: true, opacity: 0.3 });
+  const gridMesh = new THREE.Mesh(panelGeo, gridMat);
+  panel.add(gridMesh);
+  scene0Group.add(panel);
+});
+
+// CHIP ON SATELLITE
+const chipGeo = new THREE.BoxGeometry(1.2, 0.15, 0.9);
+const chipMat = new THREE.MeshStandardMaterial({
+  color: 0x1a0000, roughness: 0.1, metalness: 0.95,
+  emissive: 0xff2200, emissiveIntensity: 0.0
+});
+const chip = new THREE.Mesh(chipGeo, chipMat);
+chip.position.set(0, -0.17, 0);
+chip.castShadow = true;
+scene0Group.add(chip);
+
+// CHIP GLOW LIGHT
+const chipLight = new THREE.PointLight(0xff2200, 0, 5);
+chipLight.position.set(0, 0.5, 0);
+scene0Group.add(chipLight);
+
+// MHD COOLING CHANNELS (tubes around chip)
+const channelPoints = [];
+const radius = 0.85;
+const steps = 60;
+for (let i = 0; i <= steps; i++) {
+  const angle = (i / steps) * Math.PI * 2;
+  const wobble = Math.sin(i * 0.4) * 0.05;
+  channelPoints.push(new THREE.Vector3(
+    Math.cos(angle) * (radius + wobble) * 0.9,
+    -0.1 + Math.sin(i * 0.8) * 0.04,
+    Math.sin(angle) * (radius + wobble) * 0.6
+  ));
+}
+const channelCurve = new THREE.CatmullRomCurve3(channelPoints, true);
+const channelGeo = new THREE.TubeGeometry(channelCurve, 80, 0.04, 8, true);
+const channelMat = new THREE.MeshStandardMaterial({
+  color: 0x003344, roughness: 0.1, metalness: 1.0,
+  transparent: true, opacity: 0.8
+});
+const channelMesh = new THREE.Mesh(channelGeo, channelMat);
+scene0Group.add(channelMesh);
+
+// LIQUID METAL PARTICLES (Galinstan flow)
+const particleCount = 200;
+const particleGeo = new THREE.BufferGeometry();
+const particlePos = new Float32Array(particleCount * 3);
+const particleProgress = new Float32Array(particleCount);
+const particleColors = new Float32Array(particleCount * 3);
+
+for (let i = 0; i < particleCount; i++) {
+  particleProgress[i] = i / particleCount;
+  const pt = channelCurve.getPoint(particleProgress[i]);
+  particlePos[i*3] = pt.x;
+  particlePos[i*3+1] = pt.y;
+  particlePos[i*3+2] = pt.z;
+  // Color gradient: hot (orange) → cool (cyan)
+  const t = i / particleCount;
+  particleColors[i*3]   = t * 1.0 + (1-t) * 0.0;  // r
+  particleColors[i*3+1] = t * 0.4 + (1-t) * 0.95; // g
+  particleColors[i*3+2] = t * 0.0 + (1-t) * 1.0;  // b
+}
+particleGeo.setAttribute('position', new THREE.BufferAttribute(particlePos, 3));
+particleGeo.setAttribute('color', new THREE.BufferAttribute(particleColors, 3));
+
+const particleMat = new THREE.PointsMaterial({
+  size: 0.08, vertexColors: true, transparent: true, opacity: 0.9,
+  sizeAttenuation: true
+});
+const particles = new THREE.Points(particleGeo, particleMat);
+scene0Group.add(particles);
+
+// ELECTROMAGNETIC FIELD RINGS
+for (let i = 0; i < 3; i++) {
+  const ringGeo = new THREE.TorusGeometry(0.6 + i * 0.2, 0.01, 8, 32);
+  const ringMat = new THREE.MeshBasicMaterial({
+    color: 0x00f5ff, transparent: true, opacity: 0.2 - i * 0.05
+  });
+  const ring = new THREE.Mesh(ringGeo, ringMat);
+  ring.rotation.x = Math.PI / 2;
+  ring.position.y = 0.1 + i * 0.12;
+  ring.userData = { emRing: true, index: i };
+  scene0Group.add(ring);
+}
+
+// HEAT RADIATOR FINS
+for (let i = -2; i <= 2; i++) {
+  const finGeo = new THREE.BoxGeometry(0.05, 0.4, 0.8);
+  const finMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.3, metalness: 0.8 });
+  const fin = new THREE.Mesh(finGeo, finMat);
+  fin.position.set(i * 0.5, 0.0, 1.7);
+  scene0Group.add(fin);
+}
+
+// ─────────────────────────────────────────
+// SCENE 1: HEAT MAP VISUALIZATION
+// ─────────────────────────────────────────
+const scene1Group = new THREE.Group();
+scene1Group.visible = false;
+scene.add(scene1Group);
+
+// Heat grid
+const gridSize = 20;
+const heatGeo = new THREE.PlaneGeometry(8, 5, gridSize-1, gridSize-1);
+const heatColors = new Float32Array(gridSize * gridSize * 3);
+
+function updateHeatMap(time) {
+  const verts = heatGeo.attributes.position;
+  for (let i = 0; i < gridSize; i++) {
+    for (let j = 0; j < gridSize; j++) {
+      const idx = i * gridSize + j;
+      const x = (j / (gridSize-1) - 0.5) * 2;
+      const y = (i / (gridSize-1) - 0.5) * 2;
+      // Heat distribution: hot center, cooler edges + time variation
+      const dist = Math.sqrt(x*x + y*y);
+      const heat = Math.max(0, 1 - dist * 0.8) + 
+                   Math.sin(x * 3 + time) * 0.1 +
+                   Math.cos(y * 3 + time * 0.7) * 0.08;
+      const h = Math.max(0, Math.min(1, heat));
+      verts.setY(idx, h * 0.6);
+      // Color: blue=cold, green=mid, red=hot
+      if (h < 0.33) {
+        const t = h / 0.33;
+        heatColors[idx*3] = 0; heatColors[idx*3+1] = t; heatColors[idx*3+2] = 1 - t;
+      } else if (h < 0.66) {
+        const t = (h - 0.33) / 0.33;
+        heatColors[idx*3] = t; heatColors[idx*3+1] = 1; heatColors[idx*3+2] = 0;
+      } else {
+        const t = (h - 0.66) / 0.34;
+        heatColors[idx*3] = 1; heatColors[idx*3+1] = 1 - t; heatColors[idx*3+2] = 0;
+      }
+    }
+  }
+  verts.needsUpdate = true;
+  if (heatGeo.attributes.color) heatGeo.attributes.color.needsUpdate = true;
+}
+heatGeo.setAttribute('color', new THREE.BufferAttribute(heatColors, 3));
+heatGeo.computeVertexNormals();
+
+const heatMat = new THREE.MeshPhongMaterial({ vertexColors: true, side: THREE.DoubleSide, shininess: 50 });
+const heatMesh = new THREE.Mesh(heatGeo, heatMat);
+heatMesh.rotation.x = -Math.PI / 4;
+heatMesh.position.y = -1;
+scene1Group.add(heatMesh);
+
+// Wireframe overlay
+const wireMat = new THREE.MeshBasicMaterial({ color: 0x00f5ff, wireframe: true, transparent: true, opacity: 0.07 });
+const wireMesh = new THREE.Mesh(heatGeo, wireMat);
+wireMesh.rotation.x = -Math.PI / 4;
+wireMesh.position.y = -1;
+scene1Group.add(wireMesh);
+
+// Hot spot orbs
+for (let i = 0; i < 5; i++) {
+  const orbGeo = new THREE.SphereGeometry(0.12, 16, 16);
+  const heat = Math.random();
+  const orbMat = new THREE.MeshBasicMaterial({
+    color: new THREE.Color().setHSL(heat < 0.5 ? 0.0 : 0.12, 1, 0.5),
+    transparent: true, opacity: 0.8
+  });
+  const orb = new THREE.Mesh(orbGeo, orbMat);
+  orb.position.set((Math.random()-0.5)*6, 0.5 + heat*0.5, (Math.random()-0.5)*3);
+  orb.userData.heat = heat;
+  scene1Group.add(orb);
+}
+
+// ─────────────────────────────────────────
+// SCENE 2: JINX vs DNS
+// ─────────────────────────────────────────
+const scene2Group = new THREE.Group();
+scene2Group.visible = false;
+scene.add(scene2Group);
+
+// Two fluid simulation domains
+const simSize = 24;
+const jinxGeo = new THREE.PlaneGeometry(4, 4, simSize-1, simSize-1);
+const dnsGeo = new THREE.PlaneGeometry(4, 4, simSize-1, simSize-1);
+
+jinxGeo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(simSize*simSize*3), 3));
+dnsGeo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(simSize*simSize*3), 3));
+
+const jinxMat = new THREE.MeshPhongMaterial({ vertexColors: true, side: THREE.DoubleSide, shininess: 80 });
+const dnsMat = new THREE.MeshPhongMaterial({ vertexColors: true, side: THREE.DoubleSide, shininess: 80 });
+
+const jinxMesh = new THREE.Mesh(jinxGeo, jinxMat);
+const dnsMesh = new THREE.Mesh(dnsGeo, dnsMat);
+
+jinxMesh.rotation.x = -Math.PI/2;
+dnsMesh.rotation.x = -Math.PI/2;
+jinxMesh.position.set(-2.5, -0.5, 0);
+dnsMesh.position.set(2.5, -0.5, 0);
+scene2Group.add(jinxMesh);
+scene2Group.add(dnsMesh);
+
+// Divider line
+const divGeo = new THREE.BoxGeometry(0.02, 2, 5);
+const divMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.3 });
+scene2Group.add(new THREE.Mesh(divGeo, divMat));
+
+let dnsExplodeTime = 0;
+let simStep = 0;
+
+function updateJinxDNS(time) {
+  simStep++;
+  const colors = jinxGeo.attributes.color;
+  const dnsColors = dnsGeo.attributes.color;
+  const jinxVerts = jinxGeo.attributes.position;
+  const dnsVerts = dnsGeo.attributes.position;
+
+  for (let i = 0; i < simSize; i++) {
+    for (let j = 0; j < simSize; j++) {
+      const idx = i * simSize + j;
+      const x = j / (simSize-1) - 0.5;
+      const y = i / (simSize-1) - 0.5;
+
+      // JINX: stable turbulence
+      const jinxVal = Math.sin(x*8 + time*0.5) * Math.cos(y*8 + time*0.7) * 0.5 +
+                      Math.sin(x*3 - time*0.3 + y*5) * 0.3;
+      const jh = (jinxVal + 1) / 2;
+      jinxVerts.setY(idx, jh * 0.4);
+      colors.setXYZ(idx, 0.0, jh * 0.6 + 0.4, jh * 0.2 + 0.3);
+
+      // DNS: explodes after step 150
+      const explosionFactor = simStep > 150 ? Math.min(4, (simStep - 150) / 80) : 0;
+      const dnsVal = (Math.sin(x*8 + time*0.5) * Math.cos(y*8 + time*0.7) +
+                      Math.random() * explosionFactor * 0.5) * (1 + explosionFactor);
+      const dh = Math.min(1, Math.abs(dnsVal) * 0.5);
+      dnsVerts.setY(idx, Math.min(2, dh * (1 + explosionFactor * 1.5)));
+      if (explosionFactor > 0.3) {
+        dnsColors.setXYZ(idx, 0.8 + explosionFactor * 0.2, 0.1, 0.0);
+      } else {
+        dnsColors.setXYZ(idx, dh * 0.4, dh * 0.8, 1.0);
+      }
+    }
+  }
+  jinxVerts.needsUpdate = true; dnsVerts.needsUpdate = true;
+  colors.needsUpdate = true; dnsColors.needsUpdate = true;
+  jinxGeo.computeVertexNormals(); dnsGeo.computeVertexNormals();
+
+  // Update label
+  if (simStep > 150) {
+    document.getElementById('dns-steps').textContent = `DIVERGED @${simStep}`;
+    document.getElementById('dns-steps').style.color = '#ff2244';
+  }
+  if (simStep > 500) simStep = 0;
+  document.getElementById('jinx-steps').textContent = `${Math.min(simStep, 500)} / 500 ✓`;
+}
+
+// ─────────────────────────────────────────
+// STARS
+// ─────────────────────────────────────────
+const starGeo = new THREE.BufferGeometry();
+const starPos = new Float32Array(2000 * 3);
+for (let i = 0; i < 2000; i++) {
+  starPos[i*3]   = (Math.random()-0.5)*200;
+  starPos[i*3+1] = (Math.random()-0.5)*200;
+  starPos[i*3+2] = (Math.random()-0.5)*200;
+}
+starGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
+const starMat = new THREE.PointsMaterial({ size: 0.08, color: 0xaaddff, sizeAttenuation: true });
+scene.add(new THREE.Points(starGeo, starMat));
+
+// GRID FLOOR
+const gridHelper = new THREE.GridHelper(30, 30, 0x001a2e, 0x001a2e);
+gridHelper.position.y = -2;
+scene.add(gridHelper);
+
+// ─────────────────────────────────────────
+// MINI ENERGY GRAPH
+// ─────────────────────────────────────────
+const gCanvas = document.getElementById('energyGraph');
+const gCtx = gCanvas.getContext('2d');
+const graphData = { jinx: [], dns: [] };
+
+function drawEnergyGraph() {
+  const w = gCanvas.parentElement.clientWidth;
+  const h = 50;
+  gCanvas.width = w * window.devicePixelRatio;
+  gCanvas.height = h * window.devicePixelRatio;
+  gCanvas.style.width = w + 'px';
+  gCanvas.style.height = h + 'px';
+  gCtx.scale(window.devicePixelRatio, window.devicePixelRatio);
+  gCtx.clearRect(0, 0, w, h);
+
+  // Background
+  gCtx.fillStyle = 'rgba(0,10,20,0.5)';
+  gCtx.fillRect(0, 0, w, h);
+
+  // Draw JINX line (stable)
+  if (graphData.jinx.length > 1) {
+    gCtx.beginPath();
+    gCtx.strokeStyle = '#00ff88';
+    gCtx.lineWidth = 1.5;
+    graphData.jinx.forEach((v, i) => {
+      const x = (i / (graphData.jinx.length - 1)) * w;
+      const y = h - (v / 1.2) * h * 0.8 - 4;
+      i === 0 ? gCtx.moveTo(x, y) : gCtx.lineTo(x, y);
+    });
+    gCtx.stroke();
+  }
+
+  // Draw DNS line (exploding)
+  if (graphData.dns.length > 1) {
+    gCtx.beginPath();
+    gCtx.strokeStyle = '#ff2244';
+    gCtx.lineWidth = 1.5;
+    graphData.dns.forEach((v, i) => {
+      const x = (i / (graphData.dns.length - 1)) * w;
+      const y = Math.max(2, h - (v / 1.2) * h * 0.8 - 4);
+      i === 0 ? gCtx.moveTo(x, y) : gCtx.lineTo(x, y);
+    });
+    gCtx.stroke();
+  }
+
+  // Labels
+  gCtx.font = '8px Share Tech Mono, monospace';
+  gCtx.fillStyle = '#00ff88';
+  gCtx.fillText('JINX', 4, 12);
+  gCtx.fillStyle = '#ff2244';
+  gCtx.fillText('DNS', 4, 24);
+  gCtx.fillStyle = 'rgba(0,245,255,0.3)';
+  gCtx.fillText('ENERGY →', w - 58, h - 4);
+}
+
+// ─────────────────────────────────────────
+// STATE
+// ─────────────────────────────────────────
+let currentScene = 0;
+let paused = false;
+let clock = new THREE.Clock();
+let elapsed = 0;
+let frameCount = 0;
+let lastFpsTime = 0;
+const groups = [scene0Group, scene1Group, scene2Group];
+
+// ─────────────────────────────────────────
+// CAMERA ORBIT
+// ─────────────────────────────────────────
+let camAngle = 0;
+let camAngleTarget = 0;
+let isDragging = false;
+let lastMouseX = 0;
+let camY = 4;
+let camR = 12;
+
+canvas.addEventListener('mousedown', e => { isDragging = true; lastMouseX = e.clientX; });
+canvas.addEventListener('mouseup', () => isDragging = false);
+canvas.addEventListener('mousemove', e => {
+  if (!isDragging) return;
+  camAngleTarget += (e.clientX - lastMouseX) * 0.01;
+  lastMouseX = e.clientX;
+});
+canvas.addEventListener('wheel', e => { camR = Math.max(5, Math.min(20, camR + e.deltaY * 0.01)); });
+
+// Touch
+let lastTouchX = 0;
+canvas.addEventListener('touchstart', e => { lastTouchX = e.touches[0].clientX; });
+canvas.addEventListener('touchmove', e => {
+  camAngleTarget += (e.touches[0].clientX - lastTouchX) * 0.01;
+  lastTouchX = e.touches[0].clientX;
+  e.preventDefault();
+}, { passive: false });
+
+// ─────────────────────────────────────────
+// ANIMATE PANELS IN
+// ─────────────────────────────────────────
+function animatePanels() {
+  const cards = document.querySelectorAll('.card');
+  cards.forEach((card, i) => {
+    gsap.to(card, {
+      opacity: 1,
+      x: 0,
+      duration: 0.6,
+      delay: 0.3 + i * 0.1,
+      ease: 'power2.out'
+    });
+  });
+}
+setTimeout(animatePanels, 500);
+
+// ─────────────────────────────────────────
+// SCENE SWITCHING
+// ─────────────────────────────────────────
+const sceneLabels = [
+  'MAGNETOHYDRODYNAMIC LIQUID METAL COOLING',
+  'THERMAL DISTRIBUTION — CHIP SURFACE',
+  'JINX SURROGATE vs CLASSICAL DNS SOLVER'
+];
+
+function switchScene(idx, btn) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+
+  groups.forEach((g, i) => {
+    gsap.to(g.scale, { x: i === idx ? 1 : 0.001, y: i === idx ? 1 : 0.001, z: i === idx ? 1 : 0.001, duration: 0.4 });
+    gsap.to(g, { delay: 0.1, onComplete: () => { g.visible = i === idx; } });
+  });
+  groups[idx].visible = true;
+  currentScene = idx;
+
+  document.getElementById('scene-label').style.opacity = 0;
+  setTimeout(() => {
+    document.getElementById('scene-label').textContent = sceneLabels[idx];
+    gsap.to(document.getElementById('scene-label'), { opacity: 1, duration: 0.4 });
+  }, 200);
+
+  // Camera presets
+  const camPresets = [
+    { r: 12, y: 4, angle: 0 },
+    { r: 10, y: 8, angle: 0.3 },
+    { r: 10, y: 6, angle: 0 }
+  ];
+  const p = camPresets[idx];
+  gsap.to({ r: camR, y: camY }, { r: p.r, y: p.y, duration: 1.2, ease: 'power2.inOut', onUpdate: function() {
+    camR = this.targets()[0].r;
+    camY = this.targets()[0].y;
+  }});
+}
+
+// ─────────────────────────────────────────
+// METRICS ANIMATION
+// ─────────────────────────────────────────
+function updateMetrics(time) {
+  const chipTemp = 800 + Math.sin(time * 0.3) * 60 + Math.sin(time * 1.1) * 20;
+  const flowRate = 2.4 + Math.sin(time * 0.5) * 0.3;
+  const thermalLoad = 1.2 + Math.sin(time * 0.4) * 0.15;
+  const galinstanV = 3.1 + Math.sin(time * 0.6) * 0.4;
+  const emField = 0.8 + Math.sin(time * 0.8) * 0.1;
+
+  document.getElementById('chip-temp').textContent = chipTemp.toFixed(0) + '°C';
+  document.getElementById('flow-rate').textContent = flowRate.toFixed(1) + ' m/s';
+  document.getElementById('thermal-load').textContent = thermalLoad.toFixed(1) + ' kW';
+  document.getElementById('galinstan-v').textContent = galinstanV.toFixed(1) + ' m/s';
+  document.getElementById('em-field').textContent = emField.toFixed(1) + ' T';
+  document.getElementById('t1').textContent = chipTemp.toFixed(0) + '°C';
+  document.getElementById('t2').textContent = flowRate.toFixed(1) + ' m/s';
+
+  const tempPct = (chipTemp - 600) / 400;
+  document.getElementById('temp-bar').style.width = (tempPct * 100) + '%';
+  document.getElementById('flow-bar').style.width = (flowRate / 4 * 100) + '%';
+  document.getElementById('load-bar').style.width = (thermalLoad / 2 * 100) + '%';
+
+  // Update chip emissive
+  chipMat.emissiveIntensity = tempPct * 0.8;
+  chipLight.intensity = tempPct * 3;
+
+  // Graph data
+  const jinxEnergy = 0.85 + Math.sin(time * 0.2) * 0.05;
+  const dnsStep = simStep;
+  const dnsEnergy = dnsStep > 150
+    ? Math.min(4, 0.85 + (dnsStep - 150) / 50 * Math.random() * 2)
+    : 0.85 + Math.sin(time * 0.2) * 0.05;
+
+  graphData.jinx.push(jinxEnergy);
+  graphData.dns.push(dnsEnergy);
+  if (graphData.jinx.length > 80) { graphData.jinx.shift(); graphData.dns.shift(); }
+  drawEnergyGraph();
+}
+
+// ─────────────────────────────────────────
+// SIM TIMER
+// ─────────────────────────────────────────
+let simSeconds = 0;
+function updateTimer() {
+  simSeconds++;
+  const m = Math.floor(simSeconds / 60).toString().padStart(2, '0');
+  const s = (simSeconds % 60).toString().padStart(2, '0');
+  document.getElementById('sim-time').textContent = `T+${m}:${s}`;
+}
+setInterval(() => { if (!paused) updateTimer(); }, 1000);
+
+// ─────────────────────────────────────────
+// MAIN RENDER LOOP
+// ─────────────────────────────────────────
+function animate() {
+  requestAnimationFrame(animate);
+  if (paused) return;
+
+  const dt = clock.getDelta();
+  elapsed += dt;
+
+  // FPS
+  frameCount++;
+  if (elapsed - lastFpsTime > 1) {
+    document.getElementById('fps-counter').textContent = frameCount + ' FPS';
+    frameCount = 0;
+    lastFpsTime = elapsed;
+  }
+
+  // Camera orbit
+  camAngle += (camAngleTarget - camAngle) * 0.05 + 0.003;
+  camera.position.x = Math.sin(camAngle) * camR;
+  camera.position.z = Math.cos(camAngle) * camR;
+  camera.position.y = camY;
+  camera.lookAt(0, 0, 0);
+
+  // EM rings pulse
+  scene0Group.children.forEach(c => {
+    if (c.userData.emRing) {
+      c.rotation.z = elapsed * (0.5 + c.userData.index * 0.3);
+      c.material.opacity = 0.1 + Math.sin(elapsed * 2 + c.userData.index) * 0.08;
+    }
+  });
+
+  // Satellite gentle rotation
+  scene0Group.rotation.y = Math.sin(elapsed * 0.2) * 0.15;
+
+  // Liquid metal particle flow
+  const posAttr = particles.geometry.attributes.position;
+  const speed = 0.004;
+  for (let i = 0; i < particleCount; i++) {
+    particleProgress[i] = (particleProgress[i] + speed) % 1;
+    const pt = channelCurve.getPoint(particleProgress[i]);
+    posAttr.setXYZ(i, pt.x, pt.y, pt.z);
+    // Heat-based color: hotter at entry, cooler at exit
+    const t = particleProgress[i];
+    const colAttr = particles.geometry.attributes.color;
+    colAttr.setXYZ(i, Math.sin(t * Math.PI), 0.4, Math.cos(t * Math.PI * 0.5));
+  }
+  posAttr.needsUpdate = true;
+  particles.geometry.attributes.color.needsUpdate = true;
+
+  // Lights flicker
+  pointCyan.intensity = 3 + Math.sin(elapsed * 4) * 0.3;
+  pointOrange.intensity = 2 + Math.sin(elapsed * 3.7 + 1) * 0.2;
+
+  // Scene-specific updates
+  if (currentScene === 1) updateHeatMap(elapsed);
+  if (currentScene === 2) updateJinxDNS(elapsed);
+
+  // Metrics
+  if (Math.floor(elapsed * 10) % 3 === 0) updateMetrics(elapsed);
+
+  renderer.render(scene, camera);
+}
+animate();
+
+// ─────────────────────────────────────────
+// CONTROLS
+// ─────────────────────────────────────────
+function toggleSim() {
+  paused = !paused;
+  const btn = event.target;
+  btn.textContent = paused ? '▶ RESUME' : '⏸ PAUSE';
+  if (!paused) clock.getDelta(); // drain delta
+}
+
+function resetSim() {
+  simStep = 0;
+  graphData.jinx = [];
+  graphData.dns = [];
+  simSeconds = 0;
+  clock = new THREE.Clock();
+}
+
+// ─────────────────────────────────────────
+// INTRO GSAP ANIMATION
+// ─────────────────────────────────────────
+gsap.from('header', { y: -60, opacity: 0, duration: 1, delay: 0.2, ease: 'power3.out' });
+gsap.from('.tabs', { y: -20, opacity: 0, duration: 0.8, delay: 0.4, ease: 'power2.out' });
+gsap.from('.bottom-bar', { y: 40, opacity: 0, duration: 0.8, delay: 0.5, ease: 'power2.out' });
+gsap.from('.scene-label', { opacity: 0, duration: 1, delay: 0.8 });
+
+// Initial draw
+drawEnergyGraph();
+</script>
+</body>
+</html>
