@@ -293,3 +293,7 @@ If successful, this demonstrates that:
 
 *Project represents a comprehensive response to skepticism about neural PDE solvers.*
 FROM THE GRIMIORE OF ELBALOR THE DIGITAL NECROMANCER
+
+---
+
+*From the Grimoire of Elbàlor — The Digital Necromancer 💀🔥*
