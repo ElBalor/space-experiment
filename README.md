@@ -3,6 +3,43 @@
 ## Project Overview
 This project validates the Jinx DNS surrogate model against a classical RK4 spectral DNS solver for 3D Navier-Stokes turbulence simulation.
 
+---
+
+## Dark Necromancer Graphs
+
+![Jinx x DNS rollout](figures/dark_necromancer_jinx_rollout.png)
+
+*DNS truth (top) vs Jinx autoregressive rollout (bottom) on the Taylor-Green chain, 16³ z-slice — six consecutive single-step predictions, no teacher forcing.*
+
+![Jinx x DNS diagnostics](figures/dark_necromancer_jinx_diagnostics.png)
+
+*Per-step rollout MSE, error map, divergence field, velocity-component correlation, kinetic energy comparison.*
+
+### Verified numbers (`dark_necromancer_jinx.py`)
+
+| Test | Result |
+|---|---|
+| One-step 16³ MSE | **0.002210** (fp32 reference: 0.002213) |
+| Rollout step 2 | 0.007222 |
+| Rollout step 3 | 0.013762 |
+| Rollout step 4 | 0.021183 |
+| Rollout step 5 | 0.029065 |
+| Rollout step 6 | 0.037037 — **bounded, no explosion** |
+
+Six consecutive autoregressive steps and the surrogate degrades gracefully —
+while the classical finite-difference solver exploded to NaN in the Tier 0
+victory below.
+
+Reproduce (needs the SpaceTransformer definition from the sibling
+`space-transformer/` folder and `jinx_dns_surrogate.pt`, 2.3 GB — trained by
+`calibrate_jinx_physics.py`):
+
+```bash
+python dark_necromancer_jinx.py   # writes figures/
+```
+
+---
+
 ## The Dangerous Competition
 
 ### The Challenge
