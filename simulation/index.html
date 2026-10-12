@@ -418,7 +418,7 @@
 <div class="tabs">
   <button class="tab active" onclick="switchScene(0,this)">MHD FLOW</button>
   <button class="tab" onclick="switchScene(1,this)">HEAT MAP</button>
-  <button class="tab" onclick="switchScene(2,this)">JINX vs DNS</button>
+  <button class="tab" onclick="switchScene(2,this)">FLOW vs DNS</button>
 </div>
 
 <!-- SCENE LABEL -->
@@ -496,7 +496,7 @@
 <div class="panel-right" id="panel-right">
 
   <div class="card" id="c4">
-    <div class="card-title">JINX SURROGATE</div>
+    <div class="card-title">FLOW SURROGATE</div>
     <div class="metric">
       <div class="metric-label">MODEL</div>
       <div class="metric-value cyan" style="font-size:14px">SpaceTransformer</div>
@@ -522,7 +522,7 @@
     </div>
     <div class="comparison" style="margin-top:8px">
       <div class="comp-item">
-        <div class="comp-label">JINX</div>
+        <div class="comp-label">NEURAL SOLVER</div>
         <div class="comp-val" style="color:var(--green)">STABLE</div>
       </div>
       <div class="comp-item">
@@ -555,7 +555,7 @@
   <div class="ticker">
     <div class="ticker-item">CHIP TEMP <span id="t1">847°C</span></div>
     <div class="ticker-item">FLOW <span id="t2">2.4 m/s</span></div>
-    <div class="ticker-item">JINX MSE <span>1.53e-3</span></div>
+    <div class="ticker-item">NETWORK MSE <span>1.53e-3</span></div>
     <div class="ticker-item">STABILITY <span>500 STEPS</span></div>
     <div class="ticker-item">MASS SAVED <span>1.8 kg/sat</span></div>
   </div>
@@ -803,7 +803,7 @@ for (let i = 0; i < 5; i++) {
 }
 
 // ─────────────────────────────────────────
-// SCENE 2: JINX vs DNS
+// SCENE 2: FLOW vs DNS
 // ─────────────────────────────────────────
 const scene2Group = new THREE.Group();
 scene2Group.visible = false;
@@ -838,7 +838,7 @@ scene2Group.add(new THREE.Mesh(divGeo, divMat));
 let dnsExplodeTime = 0;
 let simStep = 0;
 
-function updateJinxDNS(time) {
+function updateFlowDNS(time) {
   simStep++;
   const colors = jinxGeo.attributes.color;
   const dnsColors = dnsGeo.attributes.color;
@@ -851,7 +851,7 @@ function updateJinxDNS(time) {
       const x = j / (simSize-1) - 0.5;
       const y = i / (simSize-1) - 0.5;
 
-      // JINX: stable turbulence
+      // FLOW: stable turbulence
       const jinxVal = Math.sin(x*8 + time*0.5) * Math.cos(y*8 + time*0.7) * 0.5 +
                       Math.sin(x*3 - time*0.3 + y*5) * 0.3;
       const jh = (jinxVal + 1) / 2;
@@ -924,7 +924,7 @@ function drawEnergyGraph() {
   gCtx.fillStyle = 'rgba(0,10,20,0.5)';
   gCtx.fillRect(0, 0, w, h);
 
-  // Draw JINX line (stable)
+  // Draw FLOW line (stable)
   if (graphData.jinx.length > 1) {
     gCtx.beginPath();
     gCtx.strokeStyle = '#00ff88';
@@ -953,7 +953,7 @@ function drawEnergyGraph() {
   // Labels
   gCtx.font = '8px Share Tech Mono, monospace';
   gCtx.fillStyle = '#00ff88';
-  gCtx.fillText('JINX', 4, 12);
+  gCtx.fillText('FLOW', 4, 12);
   gCtx.fillStyle = '#ff2244';
   gCtx.fillText('DNS', 4, 24);
   gCtx.fillStyle = 'rgba(0,245,255,0.3)';
@@ -1022,7 +1022,7 @@ setTimeout(animatePanels, 500);
 const sceneLabels = [
   'MAGNETOHYDRODYNAMIC LIQUID METAL COOLING',
   'THERMAL DISTRIBUTION — CHIP SURFACE',
-  'JINX SURROGATE vs CLASSICAL DNS SOLVER'
+  'FLOW SURROGATE vs CLASSICAL DNS SOLVER'
 ];
 
 function switchScene(idx, btn) {
@@ -1164,7 +1164,7 @@ function animate() {
 
   // Scene-specific updates
   if (currentScene === 1) updateHeatMap(elapsed);
-  if (currentScene === 2) updateJinxDNS(elapsed);
+  if (currentScene === 2) updateFlowDNS(elapsed);
 
   // Metrics
   if (Math.floor(elapsed * 10) % 3 === 0) updateMetrics(elapsed);
